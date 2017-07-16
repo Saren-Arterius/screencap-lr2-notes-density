@@ -1,27 +1,28 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 from math import ceil
-from cv2 import cv
 import cv2
 import numpy
 from PIL import Image
 import pyscreenshot as ImageGrab
 from time import sleep, time
 
-method = cv.CV_TM_SQDIFF_NORMED
+method = cv2.TM_SQDIFF_NORMED
 thresold = 0.5
 density_thresold = 40
 
-def split_to(im, rows, columns):
+def split_to(im, rows, columns, show=False):
     results = []
-    for r in xrange(rows):
+    for r in range(rows):
         rs = []
-        for c in xrange(columns):
+        for c in range(columns):
             box = (
                 (c * im.size[0]) / columns,
                 (r * im.size[1]) / rows,
                 ((c + 1) * im.size[0]) / columns,
                 ((r + 1) * im.size[1]) / rows
             )
+            if show:
+                im.crop(box).show()
             rs.append(cv2.cvtColor(numpy.array(
                 im.crop(box)), cv2.COLOR_RGB2BGR))
         results.append(rs)
@@ -33,9 +34,9 @@ ts = split_to(Image.open("ts.png"), 3, 1)
 
 def get_combos():
     im = ImageGrab.grab()
-    im.thumbnail((im.size[0] / 2, im.size[1] / 2))
-    im = im.crop((0, im.size[1] / 2, im.size[0], im.size[1]))
 
+    im.thumbnail((im.size[0] / 2.5, im.size[1] / 2.5))
+    im = im.crop((0, im.size[1] / 2, im.size[0], im.size[1]))
     large_image = cv2.cvtColor(numpy.array(im), cv2.COLOR_RGB2BGR)
 
     shining_types = []
@@ -48,32 +49,35 @@ def get_combos():
         # print(mn)
         shining_types.append(mn)
         xys.append(mnLoc)
-    shining_type = min(xrange(len(shining_types)),
+    shining_type = min(range(len(shining_types)),
                        key=shining_types.__getitem__)
-    #print(shining_type, xys[shining_type])
+    # print(shining_type, xys[shining_type])
     x1, y1 = xys[shining_type]
 
     # Hard code
-    combos_field = split_to(im.crop((x1 + 82, y1, x1 + 162, y1 + 40)), 1, 4)
+    # im.show()
+    # im.crop().show()
+    combos_field = split_to(im.crop((x1 + 85, y1, x1 + 165, y1 + 40)), 1, 4)
 
     combos_arr = []
     for cd_im in combos_field[0]:
         mins = []
         for md, md_im in enumerate(digits[shining_type]):
+            start = time()
             large_image = cd_im
             result = cv2.matchTemplate(md_im, large_image, method)
             mn, _, mnLoc, _ = cv2.minMaxLoc(result)
             mins.append(mn)
         if min(mins) > thresold:
             break
-        digit = min(xrange(len(mins)), key=mins.__getitem__)
+        digit = min(range(len(mins)), key=mins.__getitem__)
         combos_arr.append(str(digit))
 
     combos = int("".join(combos_arr)) if len(combos_arr) else None
     return combos
 
 if __name__ == "__main__":
-
+    # compensate = 0
     last_combos = 0
     lag = 1
     while True:
@@ -85,7 +89,7 @@ if __name__ == "__main__":
         if not combos:
             lag += duration
             continue
-        density = (combos - last_combos) / lag
+        density = (combos - last_combos) / (duration if duration > 1 else lag)
         if not combos or combos < last_combos or density > density_thresold:
             lag += duration
             continue
@@ -93,4 +97,5 @@ if __name__ == "__main__":
               round(density, 2), round(lag, 2), round(duration, 2)))
         lag = 1
         last_combos = combos
-        sleep(1 - duration)
+        if duration <= 1:
+            sleep(1 - duration)
